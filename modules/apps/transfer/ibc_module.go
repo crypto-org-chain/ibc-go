@@ -230,9 +230,12 @@ func (im IBCModule) OnAcknowledgementPacket(
 		return sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "cannot unmarshal ICS-20 transfer packet data: %s", err.Error())
 	}
 
-	bz := types.ModuleCdc.MustMarshalJSON(&ack)
-	if !bytes.Equal(bz, acknowledgement) {
-		return sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "acknowledgement did not marshal to expected bytes: %X ≠ %X", bz, acknowledgement)
+	// keep it compatible with old solomachine ack
+	if !bytes.Equal(acknowledgement, []byte("{\"result\":[1]}")) {
+		bz := types.ModuleCdc.MustMarshalJSON(&ack)
+		if !bytes.Equal(bz, acknowledgement) {
+			return sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "acknowledgement did not marshal to expected bytes: %X ≠ %X", bz, acknowledgement)
+		}
 	}
 
 	if err := im.keeper.OnAcknowledgementPacket(ctx, packet, data, ack); err != nil {
