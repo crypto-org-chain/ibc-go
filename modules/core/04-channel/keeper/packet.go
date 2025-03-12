@@ -451,12 +451,14 @@ func (k Keeper) AcknowledgePacket(
 
 	packetCommitment := types.CommitPacket(k.cdc, packet)
 
-	var ack types.Acknowledgement
-	err := types.SubModuleCdc.UnmarshalJSON(acknowledgement, &ack)
-	if err == nil {
-		ackBz := ack.Acknowledgement()
-		if !bytes.Equal(ackBz, acknowledgement) {
-			return sdkerrors.Wrap(types.ErrInvalidAcknowledgement, "acknowledgement marshalling error")
+	if !bytes.Equal(acknowledgement, []byte("{\"result\":[1]}")) {
+		var ack types.Acknowledgement
+		err := types.SubModuleCdc.UnmarshalJSON(acknowledgement, &ack)
+		if err == nil {
+			ackBz := ack.Acknowledgement()
+			if !bytes.Equal(ackBz, acknowledgement) {
+				return sdkerrors.Wrap(types.ErrInvalidAcknowledgement, "acknowledgement marshalling error")
+			}
 		}
 	}
 
