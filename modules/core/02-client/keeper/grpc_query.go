@@ -80,10 +80,27 @@ func (q *queryServer) ClientStates(goCtx context.Context, req *types.QueryClient
 	var clientStates types.IdentifiedClientStates
 	store := prefix.NewStore(runtime.KVStoreAdapter(q.storeService.OpenKVStore(ctx)), host.KeyClientStorePrefix)
 
-	pageRes, err := query.FilteredPaginate(store, req.Pagination, func(key, value []byte, accumulate bool) (bool, error) {
+	pageRes, err := query.FilteredPaginate(store, req.Pagination, func(key, value []byte, accumulate bool) (hit bool, err error) {
+		// cronos-patch(security): defensively recover from panics raised while
+		// decoding a single entry (e.g. malformed bytes stored under a key whose
+		// last path segment is "clientState" can panic inside the proto decoder
+		// with "index out of range"). Skip the offending entry instead of
+		// bubbling the panic up and failing the whole query / REST server.
+		defer func() {
+			if r := recover(); r != nil {
+				q.Logger(ctx).Info(
+					"ClientStates: recovered panic while decoding entry; skipping",
+					"key", string(key),
+					"panic", fmt.Sprintf("%v", r),
+				)
+				hit, err = false, nil
+			}
+		}()
+
 		// filter any metadata stored under client state key
 		keySplit := strings.Split(string(key), "/")
-		if keySplit[len(keySplit)-1] != "clientState" {
+		// cronos-patch(security): guard keySplit[1] access below.
+		if len(keySplit) < 2 || keySplit[len(keySplit)-1] != "clientState" {
 			return false, nil
 		}
 
