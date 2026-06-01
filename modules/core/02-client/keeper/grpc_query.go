@@ -97,11 +97,14 @@ func (q *queryServer) ClientStates(goCtx context.Context, req *types.QueryClient
 			}
 		}()
 
-		// filter any metadata stored under client state key; canonical keys are
-		// exactly /<clientID>/clientState (3 segments when split, first is empty).
-		// Keys with more segments are stale migration artifacts and must not be decoded.
+		// filter any metadata stored under client state key.
+		// prefix.NewStore strips the literal "clients" bytes (no trailing "/"), so
+		// canonical keys arrive as "/clientID/clientState": keySplit[0]=="",
+		// keySplit[1]==clientID, keySplit[2]=="clientState" (3 segments total).
+		// Keys with != 3 segments are either too short (malformed) or stale
+		// migration artifacts with more path components.
 		keySplit := strings.Split(string(key), "/")
-		if len(keySplit) != 3 || keySplit[len(keySplit)-1] != "clientState" {
+		if len(keySplit) != 3 || keySplit[0] != "" || keySplit[2] != "clientState" {
 			return false, nil
 		}
 

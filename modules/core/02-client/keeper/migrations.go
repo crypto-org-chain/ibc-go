@@ -41,14 +41,16 @@ func (m Migrator) MigrateToStatelessLocalhost(ctx sdk.Context) error {
 func (m Migrator) PruneStaleConsensusStateSubkeys(ctx sdk.Context) error {
 	store := runtime.KVStoreAdapter(m.keeper.storeService.OpenKVStore(ctx))
 	iterator := storetypes.KVStorePrefixIterator(store, host.KeyClientStorePrefix)
-	defer iterator.Close()
+	defer sdk.LogDeferred(ctx.Logger(), func() error { return iterator.Close() })
 
 	var staleKeys [][]byte
 	for ; iterator.Valid(); iterator.Next() {
 		// iterator.Key() returns the full key including the "clients/" prefix.
 		// Canonical clientState key:  clients/<id>/clientState           (3 parts)
 		// Canonical consensusState:   clients/<id>/consensusStates/<h>   (4 parts)
-		// Stale artifact:             clients/<id>/consensusStates/<rev>/<h>/clientState (6 parts)
+		// Stale artifacts (caught by len >= 5):
+		//   clients/<id>/consensusStates/<h>/clientState          (5 parts, rev-less old format)
+		//   clients/<id>/consensusStates/<rev>/<h>/clientState    (6 parts, observed on Cronos)
 		parts := strings.Split(string(iterator.Key()), "/")
 		if len(parts) >= 5 &&
 			parts[2] == host.KeyConsensusStatePrefix &&

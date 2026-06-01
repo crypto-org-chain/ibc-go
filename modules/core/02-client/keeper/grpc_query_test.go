@@ -10,6 +10,7 @@ import (
 	errorsmod "cosmossdk.io/errors"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/runtime"
 	"github.com/cosmos/cosmos-sdk/types/query"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
 
@@ -147,6 +148,37 @@ func (s *KeeperTestSuite) TestQueryClientStates() {
 
 				// order is sorted by client id
 				expClientStates = types.IdentifiedClientStates{idcs, idcs2}.Sort()
+				req = &types.QueryClientStatesRequest{
+					Pagination: &query.PageRequest{
+						Limit:      20,
+						CountTotal: true,
+					},
+				}
+			},
+			nil,
+		},
+		{
+			// Verifies that stale clients/<id>/consensusStates/<rev>/<h>/clientState
+			// keys left by the pre-v9 migration are silently skipped and do not
+			// prevent valid client states from being returned.
+			"stale consensusState subkey silently skipped, valid clients returned",
+			func() {
+				path := ibctesting.NewPath(s.chainA, s.chainB)
+				path.SetupClients()
+
+				// Write a stale 6-segment key with ConsensusState bytes directly
+				// into the IBC store to simulate the pre-migration state.
+				ibcStore := runtime.KVStoreAdapter(
+					runtime.NewKVStoreService(s.chainA.GetSimApp().GetKey(exported.StoreKey)).
+						OpenKVStore(s.chainA.GetContext()),
+				)
+				staleKey := fmt.Sprintf("clients/%s/%s/0/1/%s",
+					path.EndpointA.ClientID, host.KeyConsensusStatePrefix, host.KeyClientState)
+				ibcStore.Set([]byte(staleKey), []byte("consensus-state-bytes-not-client-state"))
+
+				clientState := path.EndpointA.GetClientState()
+				idcs := types.NewIdentifiedClientState(path.EndpointA.ClientID, clientState)
+				expClientStates = types.IdentifiedClientStates{idcs}.Sort()
 				req = &types.QueryClientStatesRequest{
 					Pagination: &query.PageRequest{
 						Limit:      20,
