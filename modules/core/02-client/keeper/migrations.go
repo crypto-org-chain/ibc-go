@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"bytes"
 	"strings"
 
 	"github.com/cosmos/cosmos-sdk/runtime"
@@ -55,9 +56,7 @@ func (m Migrator) PruneStaleConsensusStateSubkeys(ctx sdk.Context) error {
 		if len(parts) >= 5 &&
 			parts[2] == host.KeyConsensusStatePrefix &&
 			parts[len(parts)-1] == host.KeyClientState {
-			k := make([]byte, len(iterator.Key()))
-			copy(k, iterator.Key())
-			staleKeys = append(staleKeys, k)
+			staleKeys = append(staleKeys, bytes.Clone(iterator.Key()))
 		}
 	}
 

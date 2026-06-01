@@ -15,7 +15,7 @@ env:
 
 jobs:
   docker-build:
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     outputs:
       simd-tag: ${{ steps.get-tag.outputs.simd-tag }}
     steps:
@@ -56,7 +56,7 @@ jobs:
           path: simd-image.tar.gz
 
   build-test-matrix:
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -75,7 +75,7 @@ jobs:
           TEST_EXCLUSIONS: 'TestUpgradeTestSuite'
 
   e2e-tests:
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     needs:
       - build-test-matrix
       - docker-build
