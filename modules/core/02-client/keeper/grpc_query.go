@@ -80,10 +80,28 @@ func (q *queryServer) ClientStates(goCtx context.Context, req *types.QueryClient
 	var clientStates types.IdentifiedClientStates
 	store := prefix.NewStore(runtime.KVStoreAdapter(q.storeService.OpenKVStore(ctx)), host.KeyClientStorePrefix)
 
-	pageRes, err := query.FilteredPaginate(store, req.Pagination, func(key, value []byte, accumulate bool) (bool, error) {
-		// filter any metadata stored under client state key
+	pageRes, err := query.FilteredPaginate(store, req.Pagination, func(key, value []byte, accumulate bool) (hit bool, err error) {
+		// Recover from panics raised while decoding a single entry. Stale store
+		// keys from pre-migration state (e.g. consensusStates/<rev>/<h>/clientState)
+		// contain ConsensusState bytes under a key ending in "clientState"; the proto
+		// decoder panics on unexpected wire fields. Skip the offending entry instead
+		// of failing the whole query.
+		defer func() {
+			if r := recover(); r != nil {
+				q.Logger(ctx).Error(
+					"ClientStates: recovered panic while decoding entry; skipping",
+					"key", string(key),
+					"panic", fmt.Sprintf("%v", r),
+				)
+				hit, err = false, nil
+			}
+		}()
+
+		// filter any metadata stored under client state key; canonical keys are
+		// exactly /<clientID>/clientState (3 segments when split, first is empty).
+		// Keys with more segments are stale migration artifacts and must not be decoded.
 		keySplit := strings.Split(string(key), "/")
-		if keySplit[len(keySplit)-1] != "clientState" {
+		if len(keySplit) != 3 || keySplit[len(keySplit)-1] != "clientState" {
 			return false, nil
 		}
 
